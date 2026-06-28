@@ -1,13 +1,12 @@
-
 import os
 import json
 from flask import Blueprint, request, Response, jsonify
- 
+
 from app.services import council_service
- 
+
 council_bp = Blueprint("council", __name__)
- 
- 
+
+
 @council_bp.route("/roles", methods=["GET"])
 def get_roles():
     """
@@ -25,21 +24,28 @@ def get_roles():
         for key, role in council_service.ROLE_LIBRARY.items()
     ]
     return jsonify({"roles": roles})
- 
- 
+
+
 @council_bp.route("/council", methods=["POST"])
 def run_council():
     """
     The frontend's fetch() call hits this route. It streams back one
     small JSON object per line as the council works through its three
     stages.
- 
+
     Each line looks like one of:
-      {"type": "status",  "message": "Consulting the Venture Capitalist..."}
-      {"type": "verdict", "text": "AGREEMENT ACROSS COUNCIL: ..."}
-      {"type": "done",    "html": "<!DOCTYPE html>..."}
-      {"type": "error",   "message": "..."}
- 
+      {"type": "status",   "message": "Consulting the Venture Capitalist..."}
+      {"type": "rejected", "message": "That doesn't look like an idea..."}
+      {"type": "verdict",  "text": "AGREEMENT ACROSS COUNCIL: ..."}
+      {"type": "done",     "html": "<!DOCTYPE html>..."}
+      {"type": "error",    "message": "..."}
+
+    "rejected" means the idea was caught by validation (gibberish,
+    too short, or off-topic) before any model was ever called for the
+    actual council -- this is what protects free-tier rate limits from
+    being burned on junk input. The frontend shows this as a small
+    toast, not a chat message.
+
     "verdict" carries the chairman's plain-text answer, meant to be
     printed straight into the chat like a normal AI response. "done"
     carries the full HTML report, meant only for the separate download
@@ -48,19 +54,19 @@ def run_council():
     body = request.json or {}
     idea = body.get("idea", "").strip()
     role_keys = body.get("roles", [])  # list of role keys the user checked
- 
+
     # os.environ.get reads whatever load_dotenv() pulled in from your
     # .env file when the app started -- the same value, read fresh on
     # every request, the same way you'd read process.env.OPENROUTER_API_KEY
     # in a Next.js API route.
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
- 
+
     if not idea:
         return Response(
             json.dumps({"type": "error", "message": "Please enter an idea to review."}) + "\n",
             mimetype="application/json",
         )
- 
+
     if not api_key:
         return Response(
             json.dumps({
@@ -72,9 +78,28 @@ def run_council():
             }) + "\n",
             mimetype="application/json",
         )
- 
+
+    # ----------------------------------------------------------------
+    # IDEA VALIDATION -- runs BEFORE any council member is called.
+    # Layer 1 is instant and free (no network call). If it passes,
+    # layer 2 spends exactly ONE cheap model call to catch anything
+    # that's coherent text but still not an idea worth reviewing
+    # ("what's the weather", "tell me a joke", etc). Either layer
+    # rejecting means we never touch the 11+ calls a real council run
+    # would cost -- this is the actual rate-limit/cost protection.
+    # ----------------------------------------------------------------
+    rejection_reason = council_service.layer1_quick_reject(idea)
+    if rejection_reason is None:
+        rejection_reason = council_service.validate_idea_with_model(api_key, idea)
+
+    if rejection_reason:
+        return Response(
+            json.dumps({"type": "rejected", "message": rejection_reason}) + "\n",
+            mimetype="application/json",
+        )
+
     council = council_service.get_council_for_roles(role_keys)
- 
+
     def stream():
         # A generator function -- it `yield`s pieces of output one at a
         # time instead of returning everything at once. Flask sends
@@ -82,7 +107,7 @@ def run_council():
         # actual mechanism behind the live status updates.
         try:
             yield json.dumps({"type": "status", "message": "Starting the council..."}) + "\n"
- 
+
             responses = {}
             for member in council:
                 yield json.dumps({
@@ -93,13 +118,13 @@ def run_council():
                     api_key, member["model"], member["persona"], idea
                 )
                 responses[member["name"]] = answer
- 
+
             yield json.dumps({
                 "type": "status",
                 "message": "Anonymizing responses for peer review...",
             }) + "\n"
             anonymized_text, _ = council_service.anonymize(responses)
- 
+
             reviews = {}
             review_instructions = (
                 "You are reviewing several independent expert critiques of "
@@ -110,7 +135,7 @@ def run_council():
                 "strongest to weakest critique."
             )
             user_prompt = f"ORIGINAL IDEA:\n{idea}\n\nCRITIQUES TO REVIEW:{anonymized_text}"
- 
+
             for member in council:
                 yield json.dumps({
                     "type": "status",
@@ -120,7 +145,7 @@ def run_council():
                     api_key, member["model"], review_instructions, user_prompt
                 )
                 reviews[member["name"]] = review
- 
+
             yield json.dumps({
                 "type": "status",
                 "message": "The Chairman is synthesizing the final verdict...",
@@ -128,20 +153,20 @@ def run_council():
             verdict = council_service.stage3_chairman_synthesis(
                 api_key, idea, responses, reviews
             )
- 
+
             # Send the plain verdict text FIRST, separately from the
             # full HTML report. This is what lets the frontend print
             # it straight into the chat bubble like a normal answer,
             # instead of only ever showing a "your file is ready" card.
             yield json.dumps({"type": "verdict", "text": verdict}) + "\n"
- 
+
             html_report = council_service.build_html_report(idea, responses, reviews, verdict)
             yield json.dumps({"type": "done", "html": html_report}) + "\n"
- 
+
         except Exception as error:
             yield json.dumps({
                 "type": "error",
                 "message": f"Something went wrong: {error}",
             }) + "\n"
- 
+
     return Response(stream(), mimetype="application/json")

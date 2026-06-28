@@ -10,11 +10,7 @@ let isRunning = false;
 let availableRoles = [];
 let hasEnteredChat = false;
 
-// ----------------------------------------------------------------------
-// LAYOUT STATE: pre-chat (centered greeting + input) -> in-chat (input
-// pinned to the bottom, messages fill the scroll area above it).
-// Flips exactly once, the moment the first message is sent.
-// ----------------------------------------------------------------------
+
 function enterChatMode() {
   if (hasEnteredChat) return;
   hasEnteredChat = true;
@@ -324,6 +320,26 @@ function simpleMarkdownToHtml(text) {
 }
 
 // ----------------------------------------------------------------------
+// REJECTION TOAST
+// ----------------------------------------------------------------------
+// Shown ABOVE the roles picker when an idea is rejected as nonsense.
+// The message never gets added to the chat at all in this case --
+// per spec, a rejected idea stays unsent, it doesn't even appear as a
+// user bubble.
+let toastTimeout = null;
+
+function showRejectionToast(message) {
+  const toast = document.getElementById("reject-toast");
+  toast.textContent = message;
+  toast.classList.add("visible");
+
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    toast.classList.remove("visible");
+  }, 3500);
+}
+
+// ----------------------------------------------------------------------
 // MAIN SEND FLOW
 // ----------------------------------------------------------------------
 async function sendIdea() {
@@ -331,18 +347,12 @@ async function sendIdea() {
   const idea = input.value.trim();
   if (!idea) return;
 
-  enterChatMode(); // shifts the centered greeting+input down to a bottom bar, once
-
   isRunning = true;
   sendBtn.disabled = true;
-  addUserBubble(idea);
-  input.value = "";
-  input.style.height = "auto";
-  rolesDropdown.classList.add("hidden");
 
   const selectedRoles = getSelectedRoles();
-  const botRow = addBotMessageContainer();
-  setStatusLine(botRow, "Starting the council...");
+  let botRow = null;
+  let committed = false; // becomes true only once we know this idea was accepted
 
   try {
     const response = await fetch("/council", {
@@ -370,6 +380,30 @@ async function sendIdea() {
         if (!line.trim()) continue;
         const data = JSON.parse(line);
 
+        if (data.type === "rejected") {
+          // Idea never gets committed to the chat at all -- no user
+          // bubble, no bot row. Just a toast, and the input keeps
+          // whatever the user typed so they can edit and retry.
+          showRejectionToast(data.message);
+          isRunning = false;
+          sendBtn.disabled = false;
+          return;
+        }
+
+        // First non-rejection message means the idea was accepted --
+        // NOW we commit it to the chat (user bubble + bot row), shift
+        // into chat mode, and clear the input. Everything before this
+        // point intentionally has no visible effect on the page.
+        if (!committed) {
+          committed = true;
+          enterChatMode();
+          addUserBubble(idea);
+          input.value = "";
+          input.style.height = "auto";
+          rolesDropdown.classList.add("hidden");
+          botRow = addBotMessageContainer();
+        }
+
         if (data.type === "status") {
           setStatusLine(botRow, data.message);
         } else if (data.type === "verdict") {
@@ -386,7 +420,11 @@ async function sendIdea() {
       }
     }
   } catch (err) {
-    setStatusLine(botRow, "⚠ Connection error: " + err.message);
+    if (committed && botRow) {
+      setStatusLine(botRow, "⚠ Connection error: " + err.message);
+    } else {
+      showRejectionToast("Connection error: " + err.message);
+    }
   } finally {
     isRunning = false;
     sendBtn.disabled = false;

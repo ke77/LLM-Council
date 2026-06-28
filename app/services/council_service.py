@@ -1,16 +1,9 @@
-# This file contains every function that actually runs the council:
-# calling models, anonymizing responses, running peer review, getting
-# the chairman's verdict, and building the final HTML report.
-
-
-
 import requests
 import time
 import re
- 
-# ----------------------------------------------------------------------
+
+
 # MODEL SELECTION
-# ----------------------------------------------------------------------
 # Hardcoding specific free model slugs (like "openai/gpt-oss-120b:free")
 # is fragile -- OpenRouter's free model lineup changes week to week, and
 # a slug that's live today can 404 next week. "openrouter/free" sidesteps
@@ -19,10 +12,9 @@ import re
 # This is the single setting that keeps this app genuinely $0 and
 # working without you having to babysit model names.
 DEFAULT_MODEL = "openrouter/free"
- 
-# ----------------------------------------------------------------------
+
+
 # ROLE LIBRARY
-# ----------------------------------------------------------------------
 # Every persona the council can use. The user picks which ones actually
 # run for their specific idea -- this is what fixes the "I got a
 # Security Engineer reviewing a non-software idea" problem. Each role
@@ -151,7 +143,7 @@ ROLE_LIBRARY = {
         ),
     },
 }
- 
+
 # Sensible defaults if the user submits without picking any roles --
 # kept general-purpose rather than software-specific, since this app
 # isn't limited to software ideas.
@@ -162,12 +154,12 @@ DEFAULT_ROLE_KEYS = [
     "competitor",
     "economist",
 ]
- 
+
 # The Chairman reads everything and writes the final verdict.
 # It does not have to be one of the council members.
 CHAIRMAN_MODEL = DEFAULT_MODEL
- 
- 
+
+
 def get_council_for_roles(role_keys: list) -> list:
     """
     Takes a list of role keys the user selected (e.g. from checkboxes in
@@ -177,15 +169,70 @@ def get_council_for_roles(role_keys: list) -> list:
     """
     if not role_keys:
         role_keys = DEFAULT_ROLE_KEYS
- 
+
     council = [ROLE_LIBRARY[key] for key in role_keys if key in ROLE_LIBRARY]
- 
+
     if not council:
         council = [ROLE_LIBRARY[key] for key in DEFAULT_ROLE_KEYS]
- 
+
     return council
- 
- 
+
+
+
+# IDEA VALIDATION -- rejects junk/off-topic input before it ever
+# reaches OpenRouter, so nonsense never burns API calls or rate limit.
+# Two layers, cheapest first:
+#   Layer 1 (this function): instant, free, no network call at all.
+#     Catches the obvious stuff -- empty input, single words, keyboard
+#     mashing, repeated characters.
+#   Layer 2 (validate_idea_with_model, defined after call_model): for
+#     anything that passes Layer 1 but is still ambiguous, ONE cheap
+#     model call asks a yes/no question. Still far cheaper than letting
+#     junk through to a full council run, which is 11+ calls.
+# ----------------------------------------------------------------------
+MIN_IDEA_LENGTH = 8        # shorter than this can't describe a real idea
+MIN_WORD_COUNT = 3         # "hi", "test", "asdf" are all 1 word
+
+def layer1_quick_reject(idea: str) -> str | None:
+    """
+    Returns a short, user-facing rejection reason if the idea is
+    obviously junk, or None if it passes this layer and should move on
+    to layer 2. This never touches the network -- it's pure string
+    checks, so it costs nothing and returns instantly.
+    """
+    stripped = idea.strip()
+
+    if not stripped:
+        return "Type an idea first."
+
+    if len(stripped) < MIN_IDEA_LENGTH:
+        return "That's too short to be a real idea. Try describing it in a sentence."
+
+    word_count = len(stripped.split())
+    if word_count < MIN_WORD_COUNT:
+        return "That's too short to be a real idea. Try describing it in a sentence."
+
+    # Keyboard mashing / gibberish check: real sentences have a healthy
+    # mix of vowels and consonants and spaces. Strings like "asdkfjasldkfj"
+    # or "aaaaaaaaaa" don't.
+    letters_only = re.sub(r"[^a-zA-Z]", "", stripped)
+    if letters_only:
+        vowel_ratio = sum(1 for c in letters_only.lower() if c in "aeiou") / len(letters_only)
+        if vowel_ratio < 0.12 or vowel_ratio > 0.85:
+            return "That doesn't look like a real idea. Try describing it in a sentence."
+
+    # Same character repeated many times in a row ("aaaaaaaa",
+    # "!!!!!!!!", "1111111").
+    if re.search(r"(.)\1{5,}", stripped):
+        return "That doesn't look like a real idea. Try describing it in a sentence."
+
+    # No actual letters at all (just numbers/punctuation/emoji).
+    if not re.search(r"[a-zA-Z]", stripped):
+        return "That doesn't look like a real idea. Try describing it in a sentence."
+
+    return None
+
+
 # ----------------------------------------------------------------------
 # CORE FUNCTION: call one model on OpenRouter
 # ----------------------------------------------------------------------
@@ -194,13 +241,13 @@ def call_model(api_key: str, model: str, system_prompt: str, user_prompt: str, r
     Sends one request to OpenRouter and returns the model's text reply.
     If something goes wrong (rate limit, bad key, etc.) it returns a
     readable error message instead of crashing.
- 
+
     retries: free models occasionally return a 429 (rate limit) under
     real traffic, even well under the per-minute cap, because OpenRouter
     is balancing load across many users sharing the same free pool. A
     short wait-and-retry clears most of these without any code changes
     on your end -- this is normal free-tier behavior, not a bug.
- 
+
     Note this takes api_key as an argument instead of reading a global
     constant -- that's what makes this function safe to reuse in a web
     server, where the key has to come from somewhere other than a
@@ -221,21 +268,21 @@ def call_model(api_key: str, model: str, system_prompt: str, user_prompt: str, r
         ],
         "temperature": 0.7,
     }
- 
+
     for attempt in range(retries + 1):
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=90)
- 
+
             if response.status_code == 401:
                 return ("[ERROR: Your API key was rejected. Double-check it "
                          "was entered correctly, with no extra spaces.]")
- 
+
             if response.status_code == 404:
                 return (f"[ERROR: The model '{model}' was not found. If "
                          f"you changed DEFAULT_MODEL away from "
                          f"'openrouter/free', check https://openrouter.ai/models "
                          f"for a current free slug.]")
- 
+
             if response.status_code == 429:
                 if attempt < retries:
                     time.sleep(5 * (attempt + 1))  # back off a bit longer each retry
@@ -243,7 +290,7 @@ def call_model(api_key: str, model: str, system_prompt: str, user_prompt: str, r
                 return ("[ERROR: Rate limit hit and retries exhausted. "
                          "Free models are shared across many users -- wait "
                          "a minute and try again.]")
- 
+
             response.raise_for_status()
             data = response.json()
             return data["choices"][0]["message"]["content"]
@@ -253,20 +300,65 @@ def call_model(api_key: str, model: str, system_prompt: str, user_prompt: str, r
             return f"[ERROR: {model} timed out after {retries + 1} attempts.]"
         except Exception as error:
             return f"[ERROR calling {model}: {error}]"
- 
+
     return "[ERROR: Unexpected retry loop exit.]"
- 
- 
+
+
 # ----------------------------------------------------------------------
 # STAGE 1: Independent reviews
 # ----------------------------------------------------------------------
+def validate_idea_with_model(api_key: str, idea: str) -> str | None:
+    """
+    Layer 2 of idea validation. Only runs if layer1_quick_reject() found
+    nothing obviously wrong. Asks a free model ONE focused yes/no
+    question rather than running the idea through the full council --
+    this is what catches things like "what's the weather today" or
+    "tell me a joke" that are coherent English but aren't an idea to
+    evaluate at all.
+
+    Returns a short rejection reason (string) if the model says this
+    isn't a real idea, or None if it's fine to proceed. If the
+    moderation call itself fails for any reason (network issue, rate
+    limit), we deliberately let the idea through rather than block a
+    real user over an infrastructure hiccup -- failing open, not closed.
+    """
+    moderation_prompt = (
+        "Decide if the following input is a genuine idea, concept, "
+        "product, business, or proposal that would benefit from a "
+        "multi-perspective review (e.g. a startup idea, a product "
+        "feature, a policy proposal, a research direction). Reply with "
+        "EXACTLY one word: YES or NO.\n\n"
+        "Reply NO if the input is: a casual question unrelated to "
+        "evaluating an idea (e.g. 'what's the weather'), small talk, a "
+        "test message, a request for a joke or story, or anything that "
+        "isn't actually proposing something to be evaluated.\n\n"
+        f"INPUT: {idea}"
+    )
+
+    result = call_model(
+        api_key,
+        DEFAULT_MODEL,
+        "You are a strict classifier. Respond with exactly one word: YES or NO.",
+        moderation_prompt,
+        retries=1,
+    )
+
+    if result.startswith("[ERROR"):
+        return None  # fail open -- don't block a real user over our own infra issue
+
+    if result.strip().upper().startswith("NO"):
+        return "That doesn't look like an idea to evaluate. Try describing a concept, product, or proposal."
+
+    return None
+
+
 def stage1_independent_reviews(api_key: str, idea: str, council: list, on_progress=None) -> dict:
     """
     on_progress is an optional function we call after each step, so
     whatever is using this (a terminal script, a web server) can show
     live progress. If you don't pass one, it's simply skipped — that's
     what `if on_progress:` means below.
- 
+
     council: the list of role dicts to actually run, e.g. from
     get_council_for_roles(). Passed in explicitly rather than read off
     a global, since different requests can now use different roles.
@@ -279,8 +371,8 @@ def stage1_independent_reviews(api_key: str, idea: str, council: list, on_progre
         responses[member["name"]] = answer
         time.sleep(2)  # small pause to stay comfortably under rate limits
     return responses
- 
- 
+
+
 # ----------------------------------------------------------------------
 # STAGE 2: Anonymize + peer review
 # ----------------------------------------------------------------------
@@ -293,8 +385,8 @@ def anonymize(responses: dict) -> tuple:
         labels[label] = name
         anonymized_text += f"\n\n--- {label} ---\n{text}"
     return anonymized_text, labels
- 
- 
+
+
 def stage2_peer_review(api_key: str, idea: str, anonymized_text: str, council: list, on_progress=None) -> dict:
     review_instructions = (
         "You are reviewing several independent expert critiques of an "
@@ -309,7 +401,7 @@ def stage2_peer_review(api_key: str, idea: str, anonymized_text: str, council: l
         f"ORIGINAL IDEA:\n{idea}\n\n"
         f"CRITIQUES TO REVIEW:{anonymized_text}"
     )
- 
+
     reviews = {}
     for member in council:
         if on_progress:
@@ -318,15 +410,15 @@ def stage2_peer_review(api_key: str, idea: str, anonymized_text: str, council: l
         reviews[member["name"]] = review
         time.sleep(2)
     return reviews
- 
- 
+
+
 # ----------------------------------------------------------------------
 # STAGE 3: Chairman synthesis
 # ----------------------------------------------------------------------
 def stage3_chairman_synthesis(api_key: str, idea: str, responses: dict, reviews: dict, on_progress=None) -> str:
     if on_progress:
         on_progress("The Chairman is synthesizing the final verdict...")
- 
+
     chairman_instructions = (
         "You are the Chairman of an advisory council. You have been given "
         "an idea, independent expert critiques of it, and peer reviews of "
@@ -340,17 +432,17 @@ def stage3_chairman_synthesis(api_key: str, idea: str, responses: dict, reviews:
         "RECOMMENDATION: (a clear, specific next step — not vague "
         "encouragement)"
     )
- 
+
     combined_text = f"ORIGINAL IDEA:\n{idea}\n\nINDEPENDENT CRITIQUES:\n"
     for name, text in responses.items():
         combined_text += f"\n--- {name} ---\n{text}\n"
     combined_text += "\nPEER REVIEWS:\n"
     for name, text in reviews.items():
         combined_text += f"\n--- {name}'s review of the others ---\n{text}\n"
- 
+
     return call_model(api_key, CHAIRMAN_MODEL, chairman_instructions, combined_text)
- 
- 
+
+
 # ----------------------------------------------------------------------
 # HTML REPORT HELPERS
 # ----------------------------------------------------------------------
@@ -377,8 +469,8 @@ def normalize_unicode_punctuation(text: str) -> str:
     for unicode_char, ascii_char in replacements.items():
         text = text.replace(unicode_char, ascii_char)
     return text
- 
- 
+
+
 def escape_html(text: str) -> str:
     """
     Models sometimes write things like '<', '>', or '&' in their answers.
@@ -390,8 +482,8 @@ def escape_html(text: str) -> str:
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )
- 
- 
+
+
 def inline_format(line: str) -> str:
     """
     Converts markdown-style emphasis inside a single line into HTML.
@@ -401,14 +493,14 @@ def inline_format(line: str) -> str:
     line = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
     line = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<em>\1</em>", line)
     return line
- 
- 
+
+
 def is_table_row(line: str) -> bool:
     """A markdown table row looks like: | col 1 | col 2 | col 3 |"""
     stripped = line.strip()
     return stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2
- 
- 
+
+
 def is_table_separator(line: str) -> bool:
     """The row right under table headers, like: |------|------|"""
     stripped = line.strip()
@@ -417,14 +509,14 @@ def is_table_separator(line: str) -> bool:
     inner = stripped.strip("|")
     cells = inner.split("|")
     return all(re.match(r"^:?-+:?$", cell.strip()) for cell in cells if cell.strip())
- 
- 
+
+
 def parse_table_row(line: str) -> list:
     """Splits '| a | b | c |' into ['a', 'b', 'c'], trimming whitespace."""
     stripped = line.strip().strip("|")
     return [cell.strip() for cell in stripped.split("|")]
- 
- 
+
+
 def render_table(table_lines: list) -> str:
     """
     Converts a block of consecutive markdown table lines into real
@@ -434,15 +526,15 @@ def render_table(table_lines: list) -> str:
     """
     if not table_lines:
         return ""
- 
+
     header_cells = parse_table_row(table_lines[0])
     body_lines = table_lines[2:] if len(table_lines) > 1 and is_table_separator(table_lines[1]) else table_lines[1:]
- 
+
     html = ["<table>", "<thead><tr>"]
     for cell in header_cells:
         html.append(f"<th>{inline_format(escape_html(cell))}</th>")
     html.append("</tr></thead><tbody>")
- 
+
     for row_line in body_lines:
         if not is_table_row(row_line):
             continue
@@ -451,11 +543,11 @@ def render_table(table_lines: list) -> str:
         for cell in cells:
             html.append(f"<td>{inline_format(escape_html(cell))}</td>")
         html.append("</tr>")
- 
+
     html.append("</tbody></table>")
     return "".join(html)
- 
- 
+
+
 def text_to_html(text: str) -> str:
     """
     Converts a model's plain-text response into clean HTML. Handles the
@@ -467,7 +559,7 @@ def text_to_html(text: str) -> str:
       - short ALL-CAPS "LABEL:" lines (e.g. "FINAL RANKING:") get turned
         into small headers instead of plain text
       - blank-line-separated paragraphs
- 
+
     Note: escape_html is intentionally NOT called on the raw text up
     front anymore. Table cells and inline text are escaped individually
     inside their own handlers (render_table, inline_format callers)
@@ -476,12 +568,12 @@ def text_to_html(text: str) -> str:
     HTML-like characters inside cells.
     """
     lines = normalize_unicode_punctuation(text.strip()).split("\n")
- 
+
     html_parts = []
     list_buffer = []
     list_type = None  # "ul" or "ol"
     table_buffer = []
- 
+
     def flush_list():
         nonlocal list_buffer, list_type
         if list_buffer:
@@ -491,30 +583,30 @@ def text_to_html(text: str) -> str:
             html_parts.append(f"</{list_type}>")
             list_buffer = []
             list_type = None
- 
+
     def flush_table():
         nonlocal table_buffer
         if table_buffer:
             html_parts.append(render_table(table_buffer))
             table_buffer = []
- 
+
     paragraph_buffer = []
- 
+
     def flush_paragraph():
         if paragraph_buffer:
             joined = " ".join(paragraph_buffer).strip()
             if joined:
                 html_parts.append(f"<p>{inline_format(escape_html(joined))}</p>")
             paragraph_buffer.clear()
- 
+
     for raw_line in lines:
         line = raw_line.strip()
- 
+
         if not line:
             flush_paragraph()
             flush_table()
             continue
- 
+
         if is_table_row(line):
             flush_paragraph()
             flush_list()
@@ -522,13 +614,13 @@ def text_to_html(text: str) -> str:
             continue
         else:
             flush_table()
- 
+
         if re.match(r"^[A-Z][A-Z \-]{2,40}:$", line):
             flush_paragraph()
             flush_list()
             html_parts.append(f"<p class='label'>{inline_format(escape_html(line))}</p>")
             continue
- 
+
         heading = re.match(r"^(#{1,6})\s+(.*)", line)
         if heading:
             flush_paragraph()
@@ -537,16 +629,16 @@ def text_to_html(text: str) -> str:
             heading_text = heading.group(2)
             html_parts.append(f"<h{level}>{inline_format(escape_html(heading_text))}</h{level}>")
             continue
- 
+
         if re.match(r"^(-{3,}|\*{3,}|_{3,})$", line):
             flush_paragraph()
             flush_list()
             html_parts.append("<hr>")
             continue
- 
+
         numbered = re.match(r"^\d+[\.\)]\s+(.*)", line)
         bulleted = re.match(r"^[\-\*]\s+(.*)", line)
- 
+
         if numbered:
             flush_paragraph()
             if list_type != "ol":
@@ -554,7 +646,7 @@ def text_to_html(text: str) -> str:
                 list_type = "ol"
             list_buffer.append(numbered.group(1))
             continue
- 
+
         if bulleted:
             flush_paragraph()
             if list_type != "ul":
@@ -562,20 +654,20 @@ def text_to_html(text: str) -> str:
                 list_type = "ul"
             list_buffer.append(bulleted.group(1))
             continue
- 
+
         flush_list()
         paragraph_buffer.append(line)
- 
+
     flush_paragraph()
     flush_list()
     flush_table()
- 
+
     return "".join(html_parts)
- 
- 
+
+
 def build_html_report(idea: str, responses: dict, reviews: dict, verdict: str) -> str:
     """Builds one self-contained HTML file — no external CSS or JS needed."""
- 
+
     council_section = ""
     for name, text in responses.items():
         council_section += f"""
@@ -583,7 +675,7 @@ def build_html_report(idea: str, responses: dict, reviews: dict, verdict: str) -
           <h3>{escape_html(name)}</h3>
           {text_to_html(text)}
         </div>"""
- 
+
     review_section = ""
     for name, text in reviews.items():
         review_section += f"""
@@ -591,7 +683,7 @@ def build_html_report(idea: str, responses: dict, reviews: dict, verdict: str) -
           <h3>{escape_html(name)}'s peer review</h3>
           {text_to_html(text)}
         </div>"""
- 
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -717,33 +809,33 @@ def build_html_report(idea: str, responses: dict, reviews: dict, verdict: str) -
 </style>
 </head>
 <body>
- 
+
   <h1>LLM Council Report</h1>
   <div class="subtitle">Generated by a 3-stage multi-model council, based on Andrej Karpathy's LLM Council concept.</div>
- 
+
   <div class="idea-box">
     <strong>Idea reviewed:</strong>
     {text_to_html(idea)}
   </div>
- 
+
   <h2>Stage 1 — Independent Reviews</h2>
   {council_section}
- 
+
   <h2>Stage 2 — Anonymized Peer Review</h2>
   {review_section}
- 
+
   <h2>Stage 3 — Chairman's Final Verdict</h2>
   <div class="verdict-box">
     {text_to_html(verdict)}
   </div>
- 
+
   <footer>Generated with a free, open implementation of the LLM Council pattern.</footer>
- 
+
 </body>
 </html>"""
     return html
- 
- 
+
+
 # ----------------------------------------------------------------------
 # RUN THE FULL COUNCIL (used by both the terminal script and the web app)
 # ----------------------------------------------------------------------
@@ -753,18 +845,18 @@ def run_council(api_key: str, idea: str, role_keys: list = None, on_progress=Non
     a string. on_progress, if given, is called with a short status
     message before each major step — this is what lets the web app
     show live "Consulting the Venture Capitalist..." style updates.
- 
+
     role_keys: which roles (from ROLE_LIBRARY) to actually run. If
     omitted, get_council_for_roles() falls back to DEFAULT_ROLE_KEYS.
     """
     council = get_council_for_roles(role_keys)
- 
+
     responses = stage1_independent_reviews(api_key, idea, council, on_progress)
     anonymized_text, _ = anonymize(responses)
     reviews = stage2_peer_review(api_key, idea, anonymized_text, council, on_progress)
     verdict = stage3_chairman_synthesis(api_key, idea, responses, reviews, on_progress)
- 
+
     if on_progress:
         on_progress("Building your report...")
- 
+
     return build_html_report(idea, responses, reviews, verdict)

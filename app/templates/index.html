@@ -6,18 +6,35 @@
 <title>LLM Council</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
+<!--
+  The body carries a state class that everything else keys off:
+    "pre-chat" -- nothing sent yet, greeting + input centered on screen
+    "in-chat"  -- after the first message, header+input pinned to the
+                  bottom, messages fill the scroll area above them
+  chat.js toggles this class exactly once, on the first send.
+-->
 <body class="pre-chat">
 
   <div id="chat"><div id="chat-inner"></div></div>
 
-  <div id="composer">
-    <div id="greeting">
-      <h1>LLM Council</h1>
-      <p>Describe an idea. A council of AI models will independently review it, critique each other, and hand you a final verdict.</p>
-    </div>
+  <!--
+    #greeting lives OUTSIDE #composer on purpose. #composer uses a CSS
+    transform to slide between its centered and bottom-pinned states,
+    and any element using position:fixed INSIDE a transformed ancestor
+    gets fixed relative to that ancestor instead of the real viewport
+    (this is a CSS spec rule, not a bug) -- which is why the label was
+    sticking near the input instead of jumping to the actual corner.
+    Keeping #greeting as a direct child of <body> means its
+    position:fixed in-chat state is relative to the real viewport.
+  -->
+  <div id="greeting">
+    <h1>LLM Council</h1>
+    <p>Describe an idea. A council of AI models will independently review it, critique each other, and hand you a final verdict.</p>
+  </div>
 
+  <div id="composer">
     <div id="input-wrap">
+      <div id="reject-toast"></div>
       <div id="roles-panel">
         <button id="roles-toggle" type="button">Council roles ▾</button>
         <div id="roles-dropdown" class="hidden">
@@ -32,6 +49,11 @@
       <div class="hint">Press Enter to send &middot; Shift+Enter for a new line</div>
     </div>
   </div>
+
+  <!-- Lives at the body level, same reasoning as #greeting above --
+       a fixed-position element has to sit outside #composer's
+       transformed box to actually anchor to the real page corner. -->
+  <a id="credit" href="https://github.com/ke77" target="_blank" rel="noopener noreferrer">Built by kobbycodes</a>
 
   <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 </body>

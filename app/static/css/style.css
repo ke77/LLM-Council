@@ -25,19 +25,6 @@ body {
   overflow: hidden; /* #chat handles its own scrolling */
 }
 
-/* ======================================================================
-   LAYOUT STATES
-   "pre-chat": nothing sent yet. #composer sits centered in the full
-   viewport (greeting above the input, like Claude's empty state).
-   #chat is empty and invisible.
-
-   "in-chat": after the first message. #composer becomes a slim bar
-   pinned to the bottom (greeting shrinks down and sits just above the
-   input, both centered). #chat fills the scrollable space above it.
-
-   chat.js toggles the body class exactly once, on first send -- the
-   transition between the two is animated by the rules below.
-   ====================================================================== */
 
 #chat {
   position: absolute;
@@ -55,11 +42,6 @@ body {
 body.in-chat #chat {
   opacity: 1;
   pointer-events: auto;
-  /* leave room at the bottom so the last message + its download
-     button aren't hidden behind the now-fixed composer bar.
-     --composer-height is set dynamically by chat.js, measured from
-     the real rendered height of #composer -- not a guessed pixel
-     value, so it stays correct no matter the content inside it. */
   padding-bottom: calc(var(--composer-height, 160px) + 24px);
 }
 
@@ -81,15 +63,14 @@ body.in-chat #chat {
               transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* PRE-CHAT: centered in the middle of the screen, like Claude's
-   "Good morning" empty state. */
+
 body.pre-chat #composer {
   top: 42%;
   bottom: auto;
   transform: translateY(-50%);
 }
 
-/* IN-CHAT: pinned to the bottom, greeting collapsed small above it. */
+
 body.in-chat #composer {
   top: auto;
   bottom: 0;
@@ -98,9 +79,18 @@ body.in-chat #composer {
   padding-top: 20px;
 }
 
+
 #greeting {
+  position: absolute;
+  left: 0;
+  right: 0;
   text-align: center;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, top 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body.pre-chat #greeting {
+  top: 42%;
+  transform: translateY(calc(-100% - 34px));
 }
 
 #greeting h1 {
@@ -115,24 +105,25 @@ body.in-chat #composer {
   font-size: 0.9rem;
   color: var(--muted);
   max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-/* Once chat starts, the greeting leaves the composer entirely and
-   becomes a small, fixed logo in the top-left corner -- the input bar
-   below no longer has any header sitting above it. */
+
 body.in-chat #greeting {
   position: fixed;
   top: 0;
   left: 0;
+  right: auto;
   text-align: left;
   padding: 18px 20px;
   z-index: 20;
+  transform: none;
 }
 
 body.in-chat #greeting h1 {
   font-size: 0.95rem;
   font-weight: 600;
-  display: none;
 }
 
 body.in-chat #greeting p {
@@ -147,6 +138,7 @@ body.in-chat #greeting p {
   flex-direction: column;
   gap: 8px;
   padding: 0 16px 24px;
+  margin-top: 10em;
 }
 
 body.in-chat #input-wrap {
@@ -297,6 +289,33 @@ body.in-chat #input-wrap {
 /* ----------------------------------------------------------------
    Role selection panel
    ---------------------------------------------------------------- */
+/* ----------------------------------------------------------------
+   Rejection toast -- appears above the roles picker when an idea is
+   caught by validation (gibberish, too short, or off-topic). It's a
+   normal flex sibling in #input-wrap, not absolutely positioned, so
+   it naturally pushes the roles button down by its own height rather
+   than overlapping anything.
+   ---------------------------------------------------------------- */
+#reject-toast {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  background: #fdecec;
+  border: 1px solid #f3c5c5;
+  color: #9a3030;
+  font-size: 0.8rem;
+  border-radius: 8px;
+  padding: 0 12px;
+  transition: max-height 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease;
+}
+
+#reject-toast.visible {
+  max-height: 60px;
+  opacity: 1;
+  padding: 8px 12px;
+  margin-bottom: 2px;
+}
+
 #roles-panel {
   position: relative;
   align-self: flex-start;
@@ -395,7 +414,7 @@ body.in-chat #input-wrap {
   flex: 1;
   resize: none;
   border: none;
-  padding: 11px 0;
+  padding: 8px 0;
   font-size: 0.95rem;
   font-family: inherit;
   max-height: 160px;
@@ -441,11 +460,41 @@ body.in-chat .hint {
 /* ----------------------------------------------------------------
    Small screens
    ---------------------------------------------------------------- */
+/* ----------------------------------------------------------------
+   Credit link -- fixed to the bottom-right corner of the viewport.
+   Lives at the body level in the HTML (not inside #composer) for the
+   same reason #greeting does: a transformed ancestor would hijack
+   position:fixed into its own coordinate space instead of the real
+   page corner.
+   ---------------------------------------------------------------- */
+#credit {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  padding: 10px 16px;
+  font-size: 0.97rem;
+  color: var(--muted);
+  text-decoration: none;
+  z-index: 15;
+}
+
+#credit:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 @media (max-width: 480px) {
   #greeting h1 {
     font-size: 1.35rem;
   }
   #roles-dropdown {
     width: calc(100vw - 32px);
+  }
+  /* On narrow screens the input bar runs close to full width once
+     chat starts, leaving no clear corner for the credit link to sit
+     without crowding the send button -- hide it there, keep it
+     visible on the spacious pre-chat screen. */
+  body.in-chat #credit {
+    display: none;
   }
 }
