@@ -1,0 +1,3 @@
+[tool.taskipy.tasks]
+check = "mypy ./ && ruff check ./"
+build = "task check && python -m build"

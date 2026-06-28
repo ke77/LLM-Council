@@ -55,10 +55,6 @@ def run_council():
     idea = body.get("idea", "").strip()
     role_keys = body.get("roles", [])  # list of role keys the user checked
 
-    # os.environ.get reads whatever load_dotenv() pulled in from your
-    # .env file when the app started -- the same value, read fresh on
-    # every request, the same way you'd read process.env.OPENROUTER_API_KEY
-    # in a Next.js API route.
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
 
     if not idea:
@@ -79,7 +75,7 @@ def run_council():
             mimetype="application/json",
         )
 
-    # ----------------------------------------------------------------
+
     # IDEA VALIDATION -- runs BEFORE any council member is called.
     # Layer 1 is instant and free (no network call). If it passes,
     # layer 2 spends exactly ONE cheap model call to catch anything
@@ -87,7 +83,6 @@ def run_council():
     # ("what's the weather", "tell me a joke", etc). Either layer
     # rejecting means we never touch the 11+ calls a real council run
     # would cost -- this is the actual rate-limit/cost protection.
-    # ----------------------------------------------------------------
     rejection_reason = council_service.layer1_quick_reject(idea)
     if rejection_reason is None:
         rejection_reason = council_service.validate_idea_with_model(api_key, idea)
@@ -101,10 +96,6 @@ def run_council():
     council = council_service.get_council_for_roles(role_keys)
 
     def stream():
-        # A generator function -- it `yield`s pieces of output one at a
-        # time instead of returning everything at once. Flask sends
-        # each yielded piece to the browser immediately, which is the
-        # actual mechanism behind the live status updates.
         try:
             yield json.dumps({"type": "status", "message": "Starting the council..."}) + "\n"
 

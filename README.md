@@ -7,7 +7,7 @@ Built with Flask. Uses [OpenRouter](https://openrouter.ai)'s free-tier router, s
 ## Project structure
 
 ```
-llm-council-app/
+llm-council/
 ├── run.py                      
 ├── config.py                   
 ├── .env.example              

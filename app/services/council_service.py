@@ -304,23 +304,12 @@ def call_model(api_key: str, model: str, system_prompt: str, user_prompt: str, r
     return "[ERROR: Unexpected retry loop exit.]"
 
 
-# ----------------------------------------------------------------------
+
 # STAGE 1: Independent reviews
-# ----------------------------------------------------------------------
 def validate_idea_with_model(api_key: str, idea: str) -> str | None:
     """
     Layer 2 of idea validation. Only runs if layer1_quick_reject() found
-    nothing obviously wrong. Asks a free model ONE focused yes/no
-    question rather than running the idea through the full council --
-    this is what catches things like "what's the weather today" or
-    "tell me a joke" that are coherent English but aren't an idea to
-    evaluate at all.
-
-    Returns a short rejection reason (string) if the model says this
-    isn't a real idea, or None if it's fine to proceed. If the
-    moderation call itself fails for any reason (network issue, rate
-    limit), we deliberately let the idea through rather than block a
-    real user over an infrastructure hiccup -- failing open, not closed.
+    nothing obviously wrong.
     """
     moderation_prompt = (
         "Decide if the following input is a genuine idea, concept, "
@@ -373,9 +362,8 @@ def stage1_independent_reviews(api_key: str, idea: str, council: list, on_progre
     return responses
 
 
-# ----------------------------------------------------------------------
+
 # STAGE 2: Anonymize + peer review
-# ----------------------------------------------------------------------
 def anonymize(responses: dict) -> tuple:
     """Strips names so models can't favor themselves or each other."""
     labels = {}
@@ -412,9 +400,8 @@ def stage2_peer_review(api_key: str, idea: str, anonymized_text: str, council: l
     return reviews
 
 
-# ----------------------------------------------------------------------
+
 # STAGE 3: Chairman synthesis
-# ----------------------------------------------------------------------
 def stage3_chairman_synthesis(api_key: str, idea: str, responses: dict, reviews: dict, on_progress=None) -> str:
     if on_progress:
         on_progress("The Chairman is synthesizing the final verdict...")
@@ -443,9 +430,8 @@ def stage3_chairman_synthesis(api_key: str, idea: str, responses: dict, reviews:
     return call_model(api_key, CHAIRMAN_MODEL, chairman_instructions, combined_text)
 
 
-# ----------------------------------------------------------------------
+
 # HTML REPORT HELPERS
-# ----------------------------------------------------------------------
 def normalize_unicode_punctuation(text: str) -> str:
     """
     Models sometimes write 'fancy' Unicode punctuation -- non-breaking

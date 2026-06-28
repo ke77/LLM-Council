@@ -16,19 +16,10 @@ function enterChatMode() {
   hasEnteredChat = true;
   document.body.classList.remove("pre-chat");
   document.body.classList.add("in-chat");
-  // Give the layout one frame to apply the in-chat styles (shrunk
-  // greeting, etc.) before measuring -- measuring too early would
-  // catch the pre-chat (centered, taller) height instead.
   requestAnimationFrame(updateComposerHeight);
 }
 
 function updateComposerHeight() {
-  // Sets --composer-height to the REAL rendered height of the
-  // composer bar, instead of a guessed pixel number. #chat's bottom
-  // padding (in CSS) reads this variable, so the last message and
-  // its download button are always fully clear of the input bar --
-  // whether the textarea has grown to multiple lines, the roles
-  // dropdown changed its height, or font sizes differ across devices.
   const composer = document.getElementById("composer");
   const height = composer.getBoundingClientRect().height;
   document.documentElement.style.setProperty("--composer-height", `${height}px`);
@@ -38,9 +29,8 @@ function scrollChatToBottom() {
   chatScroll.scrollTop = chatScroll.scrollHeight;
 }
 
-// ----------------------------------------------------------------------
+
 // ROLE SELECTION
-// ----------------------------------------------------------------------
 // On page load, ask the backend which roles exist (GET /roles) and
 // render them as checkboxes. This is what lets the user pick
 // "Domain Expert" + "Economist" instead of always getting
@@ -88,20 +78,14 @@ document.addEventListener("click", (e) => {
 
 loadRoles();
 
-// Keeps --composer-height correct automatically whenever the
-// composer's actual rendered size changes -- the textarea growing as
-// you type a longer idea, the roles dropdown opening, etc. This is
-// what guarantees the download button (or any message) never ends up
-// hidden behind the input bar, without us having to remember to call
-// updateComposerHeight() after every single thing that could resize it.
+
 const composerObserver = new ResizeObserver(() => {
   if (hasEnteredChat) updateComposerHeight();
 });
 composerObserver.observe(document.getElementById("composer"));
 
-// ----------------------------------------------------------------------
+
 // TEXTAREA BEHAVIOR
-// ----------------------------------------------------------------------
 input.addEventListener("input", () => {
   input.style.height = "auto";
   input.style.height = input.scrollHeight + "px";
@@ -116,9 +100,8 @@ input.addEventListener("keydown", (e) => {
 
 sendBtn.addEventListener("click", sendIdea);
 
-// ----------------------------------------------------------------------
+
 // CHAT RENDERING
-// ----------------------------------------------------------------------
 function addUserBubble(text) {
   const row = document.createElement("div");
   row.className = "bubble-row user";
@@ -129,11 +112,6 @@ function addUserBubble(text) {
 }
 
 function addBotMessageContainer() {
-  // Creates an EMPTY bot row and returns it. The caller decides what
-  // goes inside -- a status line while running, then later the actual
-  // verdict text once it's ready. The download button (added later)
-  // is appended as a SEPARATE sibling element after this bubble, not
-  // inside it, per the "standalone button" requirement.
   const row = document.createElement("div");
   row.className = "bubble-row bot";
   row.innerHTML = `<div class="bubble bot"></div>`;
@@ -149,20 +127,12 @@ function setStatusLine(row, message) {
 }
 
 function printVerdictIntoBubble(row, verdictText) {
-  // This is the actual fix for "make it print like a normal AI
-  // response." We reuse the SAME lightweight markdown-to-HTML
-  // approach as the backend's report (bold, lists, headers, tables)
-  // so the chat bubble and the downloaded report look consistent,
-  // not like two different rendering engines.
   const bubble = row.querySelector(".bubble");
   bubble.innerHTML = simpleMarkdownToHtml(verdictText);
   scrollChatToBottom();
 }
 
 function addStandaloneDownloadButton(afterRow, htmlContent) {
-  // Deliberately a SIBLING of the chat row, not a child of the bubble.
-  // "Standalone" per the request -- it's part of the page layout
-  // under the message, not part of the message content itself.
   const wrap = document.createElement("div");
   wrap.className = "download-standalone";
   wrap.innerHTML = `<button class="download-btn">⬇ Download full report (.html)</button>`;
@@ -189,11 +159,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// A small markdown-to-HTML converter for the CHAT bubble specifically.
-// This mirrors (in spirit, not by sharing code) the Python-side
-// text_to_html() in council_service.py -- bold, lists, tables, and
-// headers -- so what you see streamed into chat looks the same as
-// what ends up in the downloaded report.
+
 function simpleMarkdownToHtml(text) {
   const lines = text.replace(/\r\n/g, "\n").trim().split("\n");
   let html = "";
@@ -319,13 +285,8 @@ function simpleMarkdownToHtml(text) {
   return html;
 }
 
-// ----------------------------------------------------------------------
+
 // REJECTION TOAST
-// ----------------------------------------------------------------------
-// Shown ABOVE the roles picker when an idea is rejected as nonsense.
-// The message never gets added to the chat at all in this case --
-// per spec, a rejected idea stays unsent, it doesn't even appear as a
-// user bubble.
 let toastTimeout = null;
 
 function showRejectionToast(message) {
@@ -339,9 +300,8 @@ function showRejectionToast(message) {
   }, 3500);
 }
 
-// ----------------------------------------------------------------------
+
 // MAIN SEND FLOW
-// ----------------------------------------------------------------------
 async function sendIdea() {
   if (isRunning) return;
   const idea = input.value.trim();
@@ -381,19 +341,14 @@ async function sendIdea() {
         const data = JSON.parse(line);
 
         if (data.type === "rejected") {
-          // Idea never gets committed to the chat at all -- no user
-          // bubble, no bot row. Just a toast, and the input keeps
-          // whatever the user typed so they can edit and retry.
+          // Idea never gets committed to the chat at all 
           showRejectionToast(data.message);
           isRunning = false;
           sendBtn.disabled = false;
           return;
         }
 
-        // First non-rejection message means the idea was accepted --
-        // NOW we commit it to the chat (user bubble + bot row), shift
-        // into chat mode, and clear the input. Everything before this
-        // point intentionally has no visible effect on the page.
+        // First non-rejection message means the idea was accepted 
         if (!committed) {
           committed = true;
           enterChatMode();
@@ -407,12 +362,8 @@ async function sendIdea() {
         if (data.type === "status") {
           setStatusLine(botRow, data.message);
         } else if (data.type === "verdict") {
-          // Print the verdict straight into the bubble, like a normal
-          // chat response -- this replaces the old "report ready" card.
           printVerdictIntoBubble(botRow, data.text);
         } else if (data.type === "done") {
-          // The download button is added AFTER and OUTSIDE the bubble,
-          // as its own standalone element under the message.
           addStandaloneDownloadButton(botRow, data.html);
         } else if (data.type === "error") {
           setStatusLine(botRow, "⚠ " + data.message);
