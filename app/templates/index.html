@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Council</title>
+
+<!--
+  url_for('static', filename='...') is Flask's way of building the
+  correct URL to a file inside app/static/. It exists so you never
+  hardcode a path like "/static/css/style.css" by hand -- if you ever
+  move where static files are served from, url_for keeps working
+  without you having to find-and-replace every reference.
+
+  This is the same job Next.js does automatically when you import a
+  CSS module or reference something from public/ -- Flask just makes
+  you call a function for it instead of using import syntax, since
+  Jinja (Flask's templating language) isn't JavaScript.
+-->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <header>
+    <h1>LLM Council</h1>
+    <p>Describe an idea. A council of AI models will independently review it, critique each other, and hand you a final verdict.</p>
+  </header>
+
+  <div id="chat"></div>
+
+  <div id="input-area">
+    <div id="input-wrap">
+      <textarea id="idea-input" rows="1" placeholder="Describe your idea... (e.g. a gamified recycling app with airtime rewards)"></textarea>
+      <button id="send-btn" title="Send">&uarr;</button>
+    </div>
+    <div class="hint">Press Enter to send &middot; Shift+Enter for a new line</div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>

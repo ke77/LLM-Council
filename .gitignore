@@ -1,0 +1,16 @@
+# Secrets -- never commit your real .env file
+.env
+
+# Python bytecode cache -- the Python equivalent of not committing
+# compiled output, like you wouldn't commit a .next/ build folder
+__pycache__/
+*.pyc
+
+# Virtual environment folder, if you create one -- equivalent of
+# not committing node_modules/
+venv/
+.venv/
+
+# Editor/OS noise
+.DS_Store
+.vscode/
