@@ -92,7 +92,7 @@ body.in-chat #composer {
 
 
 body.pre-chat #greeting {
-  top: 42%;
+  top: 28%;
   transform: translateY(calc(-100% - 56px));
 }
 
@@ -463,8 +463,12 @@ body.in-chat .hint {
 }
 
 @media (max-width: 480px) {
+  body {
+    margin-top: 60px;
+  }
+
   body.pre-chat #greeting {
-    top: 28%;
+    top: 36%;
   }
 
   #greeting h1 {
