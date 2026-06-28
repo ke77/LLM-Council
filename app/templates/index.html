@@ -4,19 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LLM Council</title>
-
-<!--
-  url_for('static', filename='...') is Flask's way of building the
-  correct URL to a file inside app/static/. It exists so you never
-  hardcode a path like "/static/css/style.css" by hand -- if you ever
-  move where static files are served from, url_for keeps working
-  without you having to find-and-replace every reference.
-
-  This is the same job Next.js does automatically when you import a
-  CSS module or reference something from public/ -- Flask just makes
-  you call a function for it instead of using import syntax, since
-  Jinja (Flask's templating language) isn't JavaScript.
--->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -30,8 +17,17 @@
 
   <div id="input-area">
     <div id="input-wrap">
-      <textarea id="idea-input" rows="1" placeholder="Describe your idea... (e.g. a gamified recycling app with airtime rewards)"></textarea>
-      <button id="send-btn" title="Send">&uarr;</button>
+      <div id="roles-panel">
+        <button id="roles-toggle" type="button">Council roles ▾</button>
+        <div id="roles-dropdown" class="hidden">
+          <p class="roles-hint">Choose who reviews your idea. Defaults are picked for general use.</p>
+          <div id="roles-list"><!-- populated by chat.js from /roles --></div>
+        </div>
+      </div>
+      <div id="message-row">
+        <textarea id="idea-input" rows="1" placeholder="Describe your idea..."></textarea>
+        <button id="send-btn" title="Send">&uarr;</button>
+      </div>
     </div>
     <div class="hint">Press Enter to send &middot; Shift+Enter for a new line</div>
   </div>

@@ -1,11 +1,30 @@
 
 import os
 import json
-from flask import Blueprint, request, Response
+from flask import Blueprint, request, Response, jsonify
  
 from app.services import council_service
  
 council_bp = Blueprint("council", __name__)
+ 
+ 
+@council_bp.route("/roles", methods=["GET"])
+def get_roles():
+    """
+    Returns every selectable role so the frontend can render
+    checkboxes, along with which ones are selected by default. The
+    frontend calls this once when the page loads.
+    """
+    roles = [
+        {
+            "key": key,
+            "name": role["name"],
+            "description": role["description"],
+            "default": key in council_service.DEFAULT_ROLE_KEYS,
+        }
+        for key, role in council_service.ROLE_LIBRARY.items()
+    ]
+    return jsonify({"roles": roles})
  
  
 @council_bp.route("/council", methods=["POST"])
@@ -13,17 +32,25 @@ def run_council():
     """
     The frontend's fetch() call hits this route. It streams back one
     small JSON object per line as the council works through its three
-    stages, finishing with the complete HTML report.
+    stages.
  
-    Each line looks like:
-      {"type": "status", "message": "Consulting the Venture Capitalist..."}
-      ...
-      {"type": "done", "html": "<!DOCTYPE html>..."}
+    Each line looks like one of:
+      {"type": "status",  "message": "Consulting the Venture Capitalist..."}
+      {"type": "verdict", "text": "AGREEMENT ACROSS COUNCIL: ..."}
+      {"type": "done",    "html": "<!DOCTYPE html>..."}
+      {"type": "error",   "message": "..."}
+ 
+    "verdict" carries the chairman's plain-text answer, meant to be
+    printed straight into the chat like a normal AI response. "done"
+    carries the full HTML report, meant only for the separate download
+    button -- the frontend does not print this one into the chat.
     """
-    idea = request.json.get("idea", "").strip()
+    body = request.json or {}
+    idea = body.get("idea", "").strip()
+    role_keys = body.get("roles", [])  # list of role keys the user checked
  
     # os.environ.get reads whatever load_dotenv() pulled in from your
-    # .env file when the app started — the same value, read fresh on
+    # .env file when the app started -- the same value, read fresh on
     # every request, the same way you'd read process.env.OPENROUTER_API_KEY
     # in a Next.js API route.
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
@@ -46,8 +73,10 @@ def run_council():
             mimetype="application/json",
         )
  
+    council = council_service.get_council_for_roles(role_keys)
+ 
     def stream():
-        # A generator function — it `yield`s pieces of output one at a
+        # A generator function -- it `yield`s pieces of output one at a
         # time instead of returning everything at once. Flask sends
         # each yielded piece to the browser immediately, which is the
         # actual mechanism behind the live status updates.
@@ -55,7 +84,7 @@ def run_council():
             yield json.dumps({"type": "status", "message": "Starting the council..."}) + "\n"
  
             responses = {}
-            for member in council_service.COUNCIL:
+            for member in council:
                 yield json.dumps({
                     "type": "status",
                     "message": f"Consulting the {member['name']}...",
@@ -73,8 +102,8 @@ def run_council():
  
             reviews = {}
             review_instructions = (
-                "You are reviewing several independent expert critiques of a "
-                "startup idea. The critiques are anonymized as Response A, "
+                "You are reviewing several independent expert critiques of "
+                "an idea. The critiques are anonymized as Response A, "
                 "Response B, etc. For each response, briefly note its "
                 "strongest point and its weakest point. Then end with a "
                 "section titled 'FINAL RANKING:' listing the responses from "
@@ -82,7 +111,7 @@ def run_council():
             )
             user_prompt = f"ORIGINAL IDEA:\n{idea}\n\nCRITIQUES TO REVIEW:{anonymized_text}"
  
-            for member in council_service.COUNCIL:
+            for member in council:
                 yield json.dumps({
                     "type": "status",
                     "message": f"{member['name']} is reviewing the council's answers...",
@@ -100,9 +129,13 @@ def run_council():
                 api_key, idea, responses, reviews
             )
  
-            yield json.dumps({"type": "status", "message": "Building your report..."}) + "\n"
-            html_report = council_service.build_html_report(idea, responses, reviews, verdict)
+            # Send the plain verdict text FIRST, separately from the
+            # full HTML report. This is what lets the frontend print
+            # it straight into the chat bubble like a normal answer,
+            # instead of only ever showing a "your file is ready" card.
+            yield json.dumps({"type": "verdict", "text": verdict}) + "\n"
  
+            html_report = council_service.build_html_report(idea, responses, reviews, verdict)
             yield json.dumps({"type": "done", "html": html_report}) + "\n"
  
         except Exception as error:
@@ -112,4 +145,3 @@ def run_council():
             }) + "\n"
  
     return Response(stream(), mimetype="application/json")
- 
