@@ -8,39 +8,39 @@ Built with Flask. Uses [OpenRouter](https://openrouter.ai)'s free-tier router, s
 
 ```
 llm-council-app/
-├── run.py                      # entry point -- start here, like `npm run dev`
-├── config.py                   # app-wide settings (not secrets)
-├── .env.example                # template for your .env file
-├── requirements.txt            # Python dependencies (like package.json)
+├── run.py                      
+├── config.py                   
+├── .env.example              
+├── requirements.txt            
 ├── app/
-│   ├── __init__.py             # application factory -- builds and configures the app
+│   ├── __init__.py             
 │   ├── routes/
-│   │   ├── pages.py            # serves the chat HTML page
+│   │   ├── pages.py            
 │   │   └── council.py          # GET /roles + POST /council (streaming)
 │   ├── services/
-│   │   └── council_service.py  # the actual council logic -- the "brain"
+│   │   └── council_service.py  # the actual council logic 
 │   ├── templates/
 │   │   └── index.html          # the chat page markup
 │   └── static/
 │       ├── css/style.css       # all styling
 │       └── js/chat.js          # frontend logic: roles, streaming, download
 └── scripts/
-    └── terminal_report.py      # standalone CLI version, no server needed
+    └── terminal_report.py      # standalone CLI version, no server needed here
 ```
 
 ## Setup
 
 1. **Clone and enter the project:**
    ```
-   git clone [YOUR GITHUB REPO URL]
-   cd llm-council-app
+   git clone https://github.com/ke77/LLM-Council
+   cd llm-council
    ```
 
 2. **Create a virtual environment** (optional but recommended — keeps this project's dependencies separate from other Python projects on your machine):
    ```
    python3 -m venv venv
-   source venv/bin/activate      # Mac/Linux
-   venv\Scripts\activate         # Windows
+   source venv/bin/activate      # Mac/Linux (and for Git Bash on Windows)
+   venv\Scripts\activate         # Windows (CMD)
    ```
 
 3. **Install dependencies:**

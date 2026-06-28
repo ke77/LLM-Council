@@ -6,16 +6,17 @@
 <title>LLM Council</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
 
-  <header>
-    <h1>LLM Council</h1>
-    <p>Describe an idea. A council of AI models will independently review it, critique each other, and hand you a final verdict.</p>
-  </header>
+<body class="pre-chat">
 
-  <div id="chat"></div>
+  <div id="chat"><div id="chat-inner"></div></div>
 
-  <div id="input-area">
+  <div id="composer">
+    <div id="greeting">
+      <h1>LLM Council</h1>
+      <p>Describe an idea. A council of AI models will independently review it, critique each other, and hand you a final verdict.</p>
+    </div>
+
     <div id="input-wrap">
       <div id="roles-panel">
         <button id="roles-toggle" type="button">Council roles ▾</button>
@@ -28,8 +29,8 @@
         <textarea id="idea-input" rows="1" placeholder="Describe your idea..."></textarea>
         <button id="send-btn" title="Send">&uarr;</button>
       </div>
+      <div class="hint">Press Enter to send &middot; Shift+Enter for a new line</div>
     </div>
-    <div class="hint">Press Enter to send &middot; Shift+Enter for a new line</div>
   </div>
 
   <script src="{{ url_for('static', filename='js/chat.js') }}"></script>

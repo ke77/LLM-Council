@@ -1,4 +1,5 @@
-const chat = document.getElementById("chat");
+const chatScroll = document.getElementById("chat");
+const chat = document.getElementById("chat-inner");
 const input = document.getElementById("idea-input");
 const sendBtn = document.getElementById("send-btn");
 const rolesToggle = document.getElementById("roles-toggle");
@@ -7,6 +8,39 @@ const rolesList = document.getElementById("roles-list");
 
 let isRunning = false;
 let availableRoles = [];
+let hasEnteredChat = false;
+
+// ----------------------------------------------------------------------
+// LAYOUT STATE: pre-chat (centered greeting + input) -> in-chat (input
+// pinned to the bottom, messages fill the scroll area above it).
+// Flips exactly once, the moment the first message is sent.
+// ----------------------------------------------------------------------
+function enterChatMode() {
+  if (hasEnteredChat) return;
+  hasEnteredChat = true;
+  document.body.classList.remove("pre-chat");
+  document.body.classList.add("in-chat");
+  // Give the layout one frame to apply the in-chat styles (shrunk
+  // greeting, etc.) before measuring -- measuring too early would
+  // catch the pre-chat (centered, taller) height instead.
+  requestAnimationFrame(updateComposerHeight);
+}
+
+function updateComposerHeight() {
+  // Sets --composer-height to the REAL rendered height of the
+  // composer bar, instead of a guessed pixel number. #chat's bottom
+  // padding (in CSS) reads this variable, so the last message and
+  // its download button are always fully clear of the input bar --
+  // whether the textarea has grown to multiple lines, the roles
+  // dropdown changed its height, or font sizes differ across devices.
+  const composer = document.getElementById("composer");
+  const height = composer.getBoundingClientRect().height;
+  document.documentElement.style.setProperty("--composer-height", `${height}px`);
+}
+
+function scrollChatToBottom() {
+  chatScroll.scrollTop = chatScroll.scrollHeight;
+}
 
 // ----------------------------------------------------------------------
 // ROLE SELECTION
@@ -58,6 +92,17 @@ document.addEventListener("click", (e) => {
 
 loadRoles();
 
+// Keeps --composer-height correct automatically whenever the
+// composer's actual rendered size changes -- the textarea growing as
+// you type a longer idea, the roles dropdown opening, etc. This is
+// what guarantees the download button (or any message) never ends up
+// hidden behind the input bar, without us having to remember to call
+// updateComposerHeight() after every single thing that could resize it.
+const composerObserver = new ResizeObserver(() => {
+  if (hasEnteredChat) updateComposerHeight();
+});
+composerObserver.observe(document.getElementById("composer"));
+
 // ----------------------------------------------------------------------
 // TEXTAREA BEHAVIOR
 // ----------------------------------------------------------------------
@@ -84,7 +129,7 @@ function addUserBubble(text) {
   row.innerHTML = `<div class="bubble user"></div>`;
   row.querySelector(".bubble").textContent = text;
   chat.appendChild(row);
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom();
 }
 
 function addBotMessageContainer() {
@@ -97,14 +142,14 @@ function addBotMessageContainer() {
   row.className = "bubble-row bot";
   row.innerHTML = `<div class="bubble bot"></div>`;
   chat.appendChild(row);
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom();
   return row;
 }
 
 function setStatusLine(row, message) {
   const bubble = row.querySelector(".bubble");
   bubble.innerHTML = `<div class="status-line"><span class="dot"></span>${escapeHtml(message)}</div>`;
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom();
 }
 
 function printVerdictIntoBubble(row, verdictText) {
@@ -115,7 +160,7 @@ function printVerdictIntoBubble(row, verdictText) {
   // not like two different rendering engines.
   const bubble = row.querySelector(".bubble");
   bubble.innerHTML = simpleMarkdownToHtml(verdictText);
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom();
 }
 
 function addStandaloneDownloadButton(afterRow, htmlContent) {
@@ -127,7 +172,7 @@ function addStandaloneDownloadButton(afterRow, htmlContent) {
   wrap.innerHTML = `<button class="download-btn">⬇ Download full report (.html)</button>`;
   wrap.querySelector(".download-btn").addEventListener("click", () => downloadHtml(htmlContent));
   afterRow.insertAdjacentElement("afterend", wrap);
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom();
 }
 
 function downloadHtml(htmlContent) {
@@ -285,6 +330,8 @@ async function sendIdea() {
   if (isRunning) return;
   const idea = input.value.trim();
   if (!idea) return;
+
+  enterChatMode(); // shifts the centered greeting+input down to a bottom bar, once
 
   isRunning = true;
   sendBtn.disabled = true;

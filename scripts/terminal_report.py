@@ -14,10 +14,6 @@ council_service.py).
 import os
 import sys
 
-# Allows this script to import from app/ even though it lives in
-# scripts/ -- adds the project root to Python's search path. This is
-# the standalone-script equivalent of how the Flask app already knows
-# its own root because it's launched from run.py at that root.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -25,9 +21,8 @@ from app.services import council_service
 
 load_dotenv()
 
-# ----------------------------------------------------------------------
+
 # CONFIGURE YOUR RUN HERE
-# ----------------------------------------------------------------------
 API_KEY = os.environ.get("OPENROUTER_API_KEY", "sk-or-v1-PASTE-YOUR-KEY-HERE")
 
 IDEA = """
