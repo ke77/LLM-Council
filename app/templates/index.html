@@ -53,7 +53,10 @@
   <!-- Lives at the body level, same reasoning as #greeting above --
        a fixed-position element has to sit outside #composer's
        transformed box to actually anchor to the real page corner. -->
-  <a id="credit" href="https://github.com/ke77" target="_blank" rel="noopener noreferrer">Built by kobbycodes</a>
+  <a id="credit" href="https://github.com/ke77" target="_blank" rel="noopener noreferrer">
+    <span class="credit-full">Built by kobbycodes</span>
+    <span class="credit-short">kobbycodes</span>
+  </a>
 
   <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 </body>

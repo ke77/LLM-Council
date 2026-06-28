@@ -36,7 +36,7 @@ body {
   padding: 24px 16px 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.25s ease; 
 }
 
 body.in-chat #chat {
@@ -64,13 +64,14 @@ body.in-chat #chat {
 }
 
 
+
 body.pre-chat #composer {
   top: 42%;
   bottom: auto;
   transform: translateY(-50%);
 }
 
-
+/* IN-CHAT: pinned to the bottom of the viewport. */
 body.in-chat #composer {
   top: auto;
   bottom: 0;
@@ -78,6 +79,7 @@ body.in-chat #composer {
   background: linear-gradient(to bottom, rgba(255,255,255,0), #fff 28px);
   padding-top: 20px;
 }
+
 
 
 #greeting {
@@ -88,9 +90,10 @@ body.in-chat #composer {
   transition: opacity 0.2s ease, top 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+
 body.pre-chat #greeting {
   top: 42%;
-  transform: translateY(calc(-100% - 34px));
+  transform: translateY(calc(-100% - 56px));
 }
 
 #greeting h1 {
@@ -138,16 +141,14 @@ body.in-chat #greeting p {
   flex-direction: column;
   gap: 8px;
   padding: 0 16px 24px;
-  margin-top: 10em;
 }
 
 body.in-chat #input-wrap {
   padding-bottom: 18px;
 }
 
-/* ----------------------------------------------------------------
-   Chat bubbles
-   ---------------------------------------------------------------- */
+
+
 .bubble-row {
   display: flex;
   margin-bottom: 6px;
@@ -183,10 +184,7 @@ body.in-chat #input-wrap {
   border-bottom-left-radius: 4px;
 }
 
-/* ----------------------------------------------------------------
-   Rendered markdown INSIDE a bot bubble (verdict text). Mirrors the
-   downloaded report's styling so chat and report feel consistent.
-   ---------------------------------------------------------------- */
+
 .bubble.bot p {
   margin: 0 0 8px 0;
 }
@@ -261,10 +259,7 @@ body.in-chat #input-wrap {
   50% { opacity: 1; }
 }
 
-/* ----------------------------------------------------------------
-   Standalone download button -- a SIBLING of the bot bubble row,
-   not part of the message content.
-   ---------------------------------------------------------------- */
+
 .download-standalone {
   display: flex;
   justify-content: flex-start;
@@ -286,16 +281,7 @@ body.in-chat #input-wrap {
   background: #f0f0f0;
 }
 
-/* ----------------------------------------------------------------
-   Role selection panel
-   ---------------------------------------------------------------- */
-/* ----------------------------------------------------------------
-   Rejection toast -- appears above the roles picker when an idea is
-   caught by validation (gibberish, too short, or off-topic). It's a
-   normal flex sibling in #input-wrap, not absolutely positioned, so
-   it naturally pushes the roles button down by its own height rather
-   than overlapping anything.
-   ---------------------------------------------------------------- */
+
 #reject-toast {
   max-height: 0;
   opacity: 0;
@@ -395,9 +381,7 @@ body.in-chat #input-wrap {
   grid-column: 2;
 }
 
-/* ----------------------------------------------------------------
-   Message row (textarea + send button)
-   ---------------------------------------------------------------- */
+
 #message-row {
   display: flex;
   gap: 10px;
@@ -457,22 +441,13 @@ body.in-chat .hint {
   margin-top: 6px;
 }
 
-/* ----------------------------------------------------------------
-   Small screens
-   ---------------------------------------------------------------- */
-/* ----------------------------------------------------------------
-   Credit link -- fixed to the bottom-right corner of the viewport.
-   Lives at the body level in the HTML (not inside #composer) for the
-   same reason #greeting does: a transformed ancestor would hijack
-   position:fixed into its own coordinate space instead of the real
-   page corner.
-   ---------------------------------------------------------------- */
+
 #credit {
   position: fixed;
   bottom: 0;
   right: 0;
   padding: 10px 16px;
-  font-size: 0.97rem;
+  font-size: 0.72rem;
   color: var(--muted);
   text-decoration: none;
   z-index: 15;
@@ -483,18 +458,50 @@ body.in-chat .hint {
   text-decoration: underline;
 }
 
+.credit-short {
+  display: none; /* desktop shows the full "Built by kobbycodes" text */
+}
+
 @media (max-width: 480px) {
+  body.pre-chat #greeting {
+    top: 28%;
+  }
+
   #greeting h1 {
     font-size: 1.35rem;
   }
+
+
+  #greeting p {
+    margin-top: 14px;
+    padding: 0 24px;
+  }
+
   #roles-dropdown {
     width: calc(100vw - 32px);
   }
-  /* On narrow screens the input bar runs close to full width once
-     chat starts, leaving no clear corner for the credit link to sit
-     without crowding the send button -- hide it there, keep it
-     visible on the spacious pre-chat screen. */
-  body.in-chat #credit {
+
+
+  #credit {
+    bottom: auto;
+    right: auto;
+    top: 0;
+    left: 0;
+    padding: 18px 20px;
+  }
+
+  .credit-full {
     display: none;
+  }
+
+  .credit-short {
+    display: inline;
+  }
+
+
+  body.in-chat #credit {
+    display: block;
+    top: 46px;
+    padding: 4px 20px;
   }
 }
