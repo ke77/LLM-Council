@@ -2,6 +2,7 @@
 
 <img width="1600" height="1013" alt="llm-council-illustration" src="https://github.com/user-attachments/assets/8bbbf278-8cec-4b18-887d-21092bdb8fb0" />
 
+
 A free, working implementation of Andrej Karpathy's "LLM Council" concept: a chat-style interface where a council of AI models independently reviews your idea, anonymously critiques each other, and a chairman model synthesizes a final verdict — printed straight into the chat, with a standalone button to download the full report as HTML.
 
 Built with Flask. Uses [OpenRouter](https://openrouter.ai)'s free-tier router, so running this costs $0.
