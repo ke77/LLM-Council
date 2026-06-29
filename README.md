@@ -5,6 +5,7 @@
 A free, working implementation of Andrej Karpathy's "LLM Council" concept: a chat-style interface where a council of AI models independently reviews your idea, anonymously critiques each other, and a chairman model synthesizes a final verdict — printed straight into the chat, with a standalone button to download the full report as HTML.
 
 Built with Flask. Uses [OpenRouter](https://openrouter.ai)'s free-tier router, so running this costs $0.
+Better responses will always be preferred, of course. You can access paid models for this setup for as low as %5 on OpenRouter
 
 ## Project structure
 
@@ -95,4 +96,4 @@ Every idea you submit goes through three stages:
 2. **Anonymized peer review** — each persona's answer is shown to the others with identities stripped, and each one critiques and ranks the rest.
 3. **Chairman synthesis** — a final model reads everything and writes one verdict: what the council agreed on, where it disagreed, and a concrete recommendation. This prints directly into the chat, with a standalone "Download full report" button underneath for the complete HTML version (including every individual response and peer review).
 
-Full technical write-up: [link to your published article]
+Find the full technical write-up here: https://kobbycodes.hashnode.dev/building-an-llm-council
